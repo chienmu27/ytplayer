@@ -20,11 +20,11 @@
     <label>影片網址：</label>
     <input type="text" id="url" placeholder="貼上 YouTube 連結">
 
-    <label>開始時間（秒）：</label>
-    <input type="number" id="start" placeholder="例如 268">
+    <label>開始時間（分:秒）：</label>
+    <input type="text" id="start" placeholder="例如 4:28">
 
-    <label>結束時間（秒）：</label>
-    <input type="number" id="end" placeholder="例如 528">
+    <label>結束時間（分:秒）：</label>
+    <input type="text" id="end" placeholder="例如 8:48">
 
     <button onclick="loadVideo()">開始播放</button>
 
@@ -33,8 +33,10 @@
 
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
-    let player;
+    let player = null;
     let stopTime = 0;
+    let checkInterval = null;
+    let currentVideoId = null;
 
     function extractVideoID(url) {
       const regExp = /(?:youtube\.com.*v=|youtu\.be\/)([^&]+)/;
@@ -42,10 +44,22 @@
       return match ? match[1] : null;
     }
 
+    function timeToSeconds(timeStr) {
+      if (!timeStr) return 0;
+      const parts = timeStr.split(':');
+      if (parts.length === 1) return parseInt(parts[0]) || 0;
+      const minutes = parseInt(parts[0]) || 0;
+      const seconds = parseInt(parts[1]) || 0;
+      return minutes * 60 + seconds;
+    }
+
     function loadVideo() {
       const url = document.getElementById('url').value;
-      const start = parseInt(document.getElementById('start').value) || 0;
-      stopTime = parseInt(document.getElementById('end').value) || 0;
+      const startStr = document.getElementById('start').value;
+      const endStr = document.getElementById('end').value;
+
+      const start = timeToSeconds(startStr);
+      stopTime = timeToSeconds(endStr);
 
       const videoId = extractVideoID(url);
       if (!videoId) {
@@ -53,9 +67,22 @@
         return;
       }
 
-      if (player) {
-        player.loadVideoById({ videoId: videoId, startSeconds: start });
-      } else {
+      // 清除舊計時器（關鍵修正）
+      if (checkInterval) {
+        clearInterval(checkInterval);
+        checkInterval = null;
+      }
+
+      // 如果是不同影片 → 直接銷毀重建（最穩定）
+      if (player && currentVideoId !== videoId) {
+        player.destroy();
+        player = null;
+      }
+
+      currentVideoId = videoId;
+
+      // 建立或重新載入影片
+      if (!player) {
         player = new YT.Player('player', {
           height: '315',
           width: '560',
@@ -65,24 +92,35 @@
           },
           events: {
             'onReady': function(event) {
+              event.target.seekTo(start, true);
               event.target.playVideo();
-              checkTime();
+              startCheckTime();
             }
           }
         });
+      } else {
+        // 強制重播（關鍵修正）
+        player.loadVideoById(videoId, start);
+        setTimeout(() => {
+          player.seekTo(start, true);
+          player.playVideo();
+          startCheckTime();
+        }, 300);
       }
     }
 
-    function checkTime() {
-      const interval = setInterval(function() {
-        if (player && stopTime > 0) {
-          const current = player.getCurrentTime();
-          if (current >= stopTime) {
-            player.pauseVideo();
-            clearInterval(interval);
-          }
+    function startCheckTime() {
+      checkInterval = setInterval(function() {
+        if (!player || stopTime <= 0) return;
+
+        const current = player.getCurrentTime();
+
+        if (current >= stopTime) {
+          player.pauseVideo();
+          clearInterval(checkInterval);
+          checkInterval = null;
         }
-      }, 500);
+      }, 200);
     }
   </script>
 </body>
