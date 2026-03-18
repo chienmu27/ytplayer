@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube 片段播放工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background:#f5f5f5; }
+    .container { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    input { width: 100%; padding: 10px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 10px; background: #ff0000; color: white; font-size: 16px; cursor: pointer; }
+    button:hover { background: #cc0000; }
+    #player { margin-top: 20px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎬 YouTube 片段播放工具</h2>
+
+    <label>影片網址：</label>
+    <input type="text" id="url" placeholder="貼上 YouTube 連結">
+
+    <label>開始時間（秒）：</label>
+    <input type="number" id="start" placeholder="例如 268">
+
+    <label>結束時間（秒）：</label>
+    <input type="number" id="end" placeholder="例如 528">
+
+    <button onclick="loadVideo()">開始播放</button>
+
+    <div id="player"></div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    let player;
+    let stopTime = 0;
+
+    function extractVideoID(url) {
+      const regExp = /(?:youtube\.com.*v=|youtu\.be\/)([^&]+)/;
+      const match = url.match(regExp);
+      return match ? match[1] : null;
+    }
+
+    function loadVideo() {
+      const url = document.getElementById('url').value;
+      const start = parseInt(document.getElementById('start').value) || 0;
+      stopTime = parseInt(document.getElementById('end').value) || 0;
+
+      const videoId = extractVideoID(url);
+      if (!videoId) {
+        alert('請輸入正確的 YouTube 網址');
+        return;
+      }
+
+      if (player) {
+        player.loadVideoById({ videoId: videoId, startSeconds: start });
+      } else {
+        player = new YT.Player('player', {
+          height: '315',
+          width: '560',
+          videoId: videoId,
+          playerVars: {
+            start: start
+          },
+          events: {
+            'onReady': function(event) {
+              event.target.playVideo();
+              checkTime();
+            }
+          }
+        });
+      }
+    }
+
+    function checkTime() {
+      const interval = setInterval(function() {
+        if (player && stopTime > 0) {
+          const current = player.getCurrentTime();
+          if (current >= stopTime) {
+            player.pauseVideo();
+            clearInterval(interval);
+          }
+        }
+      }, 500);
+    }
+  </script>
+</body>
+</html>
